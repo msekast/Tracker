@@ -83,6 +83,10 @@ void loop() {
     delay(20000); // Retry every 20s
     counter++;
   }
+
+  char dateBuff[20];
+  uint8_t dateLength = getGPSDate(dateBuff, 20);
+
   bool fixture = counter < 12;
   if (fixture) {
     Serial.println(F("Fixed it!"));
@@ -92,6 +96,9 @@ void loop() {
     Serial.print(F("Speed: ")); Serial.println(speed_kph);
     Serial.print(F("Heading: ")); Serial.println(heading);
     Serial.print(F("Altitude: ")); Serial.println(altitude);
+    if (dateLength) {
+      Serial.print(F("Date: ")); Serial.println(dateBuff);
+    }
     Serial.println(F("---------------------"));
   }
   else {
@@ -148,8 +155,8 @@ void loop() {
     // (many platforms require this for dashboards, like Adafruit IO):
     sprintf(locBuff, "%s,%s,%s,%s", speedBuff, latBuff, longBuff, altBuff); // This could look like "10,33.123456,-85.123456,120.5"
     
-    sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,lat:%s,long:%s,speed:%s,head:%s,alt:%s", imei, latBuff, longBuff,
-            speedBuff, headBuff, altBuff);
+    sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,lat:%s,long:%s,speed:%s,head:%s,alt:%s,date:%s", imei, latBuff, longBuff,
+            speedBuff, headBuff, altBuff, dateLength ? dateBuff : "");
   }
   else {
     sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,failure:Fixture", imei);
@@ -247,6 +254,36 @@ void disableGPS() {
     delay(2000); // Retry every 2s
   }
   Serial.println(F("Turned off GPS!"));
+}
+
+// Contribute back to library... if it would be adapted to all devices
+uint8_t getGPSDate(char *buffer, uint8_t maxbuff) {
+  if (fona.type() != FONA808_V2) {
+    return 0;
+  }
+
+  char gpsbuffer[120];
+  uint8_t res_len = fona.getGPS(32, gpsbuffer, 120);
+
+  if (res_len == 0)
+    return 0;
+    
+  // skip GPS run status
+  char *tok = strtok(gpsbuffer, ",");
+  if (! tok) return 0;
+
+  // skip fix status
+  tok = strtok(NULL, ",");
+  if (! tok) return 0;
+
+  // take the date
+  tok = strtok(NULL, ",");
+  if (! tok) return 0;
+
+  uint8_t len = max(maxbuff-1, (int)strlen(tok));
+  strncpy(buffer, tok, len);
+  buffer[len] = 0;
+  return len;
 }
 
 // Turn off the MCU completely. Can only wake up from RESET button
