@@ -1,0 +1,262 @@
+#include "Adafruit_FONA.h"
+
+#define FONA_RX 2
+#define FONA_TX 3
+#define FONA_RST 4
+
+#include <SoftwareSerial.h>
+SoftwareSerial fonaSS = SoftwareSerial(FONA_TX, FONA_RX);
+SoftwareSerial *fonaSerial = &fonaSS;
+
+#include <avr/sleep.h>
+#include <avr/power.h>
+
+Adafruit_FONA fona = Adafruit_FONA(FONA_RST);
+
+#define samplingRate 600 // The time in between posts, in seconds
+
+uint8_t readline(char *buff, uint8_t maxbuff, uint16_t timeout = 0);
+
+uint8_t type;
+
+float latitude, longitude, speed_kph, heading, altitude;
+
+char imei[16] = {0}; // MUST use a 16 character buffer for IMEI!
+
+bool pinEntered = false;
+
+#define useGPRS
+
+void setup() {
+  while (!Serial);
+
+  Serial.begin(115200);
+  Serial.println(F("FONA basic test"));
+  Serial.println(F("Initializing....(May take 3 seconds)"));
+
+  fonaSerial->begin(4800);
+  if (! fona.begin(*fonaSerial)) {
+    Serial.println(F("Couldn't find FONA"));
+    while (1);
+  }
+  type = fona.type();
+  Serial.println(F("FONA is OK"));
+  Serial.print(F("Found "));
+  switch (type) {
+    case FONA800L:
+      Serial.println(F("FONA 800L")); break;
+    case FONA800H:
+      Serial.println(F("FONA 800H")); break;
+    case FONA808_V1:
+      Serial.println(F("FONA 808 (v1)")); break;
+    case FONA808_V2:
+      Serial.println(F("FONA 808 (v2)")); break;
+    case FONA3G_A:
+      Serial.println(F("FONA 3G (American)")); break;
+    case FONA3G_E:
+      Serial.println(F("FONA 3G (European)")); break;
+    default: 
+      Serial.println(F("???")); break;
+  }
+  
+  // Print module IMEI number.
+  uint8_t imeiLen = fona.getIMEI(imei);
+  if (imeiLen > 0) {
+    Serial.print("Module IMEI: "); Serial.println(imei);
+  }
+
+  fona.setGPRSNetworkSettings(F("internet"), F(""), F("")); // provider specific, for coop mobile/salt prepaid
+  fona.setHTTPSRedirect(true);
+}
+
+void loop() {
+  while (!fona.enableGPS(true)) {
+    Serial.println(F("Failed to turn on GPS, retrying..."));
+    delay(2000); // Retry every 2s
+  }
+  Serial.println(F("Turned on GPS!"));
+
+  // Get a fix on location, try every 2s
+  uint8_t counter = 0;
+  while (counter < 12 && !fona.getGPS(&latitude, &longitude, &speed_kph, &heading, &altitude)) {
+    Serial.println(F("Failed to get GPS location, retrying..."));
+    delay(20000); // Retry every 20s
+    counter++;
+  }
+  bool fixture = counter < 12;
+  if (fixture) {
+    Serial.println(F("Fixed it!"));
+    Serial.println(F("---------------------"));
+    Serial.print(F("Latitude: ")); Serial.println(latitude, 6);
+    Serial.print(F("Longitude: ")); Serial.println(longitude, 6);
+    Serial.print(F("Speed: ")); Serial.println(speed_kph);
+    Serial.print(F("Heading: ")); Serial.println(heading);
+    Serial.print(F("Altitude: ")); Serial.println(altitude);
+    Serial.println(F("---------------------"));
+  }
+  else {
+    Serial.println("Failed to get fixture");
+  }
+
+#ifdef useGPRS
+  if (!pinEntered) {
+    if (!netStatus()) {
+      while (!setPIN()) {
+        Serial.println(F("Failed to set PIN, retrying..."));
+        delay(60000); // Retry every 60s
+        if (netStatus()) {
+          break;
+        }
+      }
+      Serial.println(F("Entered PIN!"));
+      pinEntered = true;
+      delay(60000); // Wait for registration 60s
+    }
+  }
+
+  while (!netStatus()) {
+    Serial.println(F("Failed to connect to cell network, retrying..."));
+    delay(2000); // Retry every 2s
+  }
+  Serial.println(F("Connected to cell network!"));
+
+  // Disable GPRS just to make sure it was actually off so that we can turn it on
+  if (!fona.enableGPRS(false)) Serial.println(F("Failed to disable GPRS!"));
+  
+  // Turn on GPRS
+  while (!fona.enableGPRS(true)) {
+    Serial.println(F("Failed to enable GPRS, retrying..."));
+    delay(2000); // Retry every 2s
+  }
+  Serial.println(F("Enabled GPRS!"));
+
+  // POST data, TODO: switch to actual POST
+  char URL[255]; // Make sure this is long enough for your request URL
+  if (fixture) {
+    char latBuff[16], longBuff[16], locBuff[64], speedBuff[16],
+         headBuff[16], altBuff[16], tempBuff[16], battBuff[16];
+  
+    // Format the floating point numbers
+    dtostrf(latitude, 1, 6, latBuff);
+    dtostrf(longitude, 1, 6, longBuff);
+    dtostrf(speed_kph, 1, 0, speedBuff);
+    dtostrf(heading, 1, 0, headBuff);
+    dtostrf(altitude, 1, 1, altBuff);
+    //dtostrf(battLevel, 1, 0, battBuff);
+  
+    // Also construct a combined, comma-separated location array
+    // (many platforms require this for dashboards, like Adafruit IO):
+    sprintf(locBuff, "%s,%s,%s,%s", speedBuff, latBuff, longBuff, altBuff); // This could look like "10,33.123456,-85.123456,120.5"
+    
+    sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,lat:%s,long:%s,speed:%s,head:%s,alt:%s", imei, latBuff, longBuff,
+            speedBuff, headBuff, altBuff);
+  }
+  else {
+    sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,failure:Fixture", imei);
+  }
+
+  Serial.println("URL getting:");
+  Serial.println(URL);
+  httpGet(URL);
+#endif
+
+  //disableGPRS();
+  disableGPS();
+  
+  Serial.println(F("Shutting down..."));
+  delay(5); // This is just to read the response of the last AT command before shutting down
+  MCU_powerDown();
+  Serial.print(F("Waiting for ")); Serial.print(samplingRate); Serial.println(F(" seconds\r\n"));
+  delay(samplingRate * 1000UL);
+  
+  powerOn();
+  moduleSetup();
+}
+
+bool httpGet(char* URL) {
+  int16_t length;
+  uint16_t statuscode;
+  Serial.println(F("****"));
+  if (!fona.HTTP_GET_start(URL, &statuscode, (uint16_t *)&length)) {
+    Serial.println("Failed!");
+    Serial.println(statuscode);
+    return false;
+  }
+  while (length > 0) {
+    while (fona.available()) {
+      char c = fona.read();
+
+      // Serial.write is too slow, we'll write directly to Serial register!
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+      loop_until_bit_is_set(UCSR0A, UDRE0); /* Wait until data register empty. */
+      UDR0 = c;
+#else
+      Serial.write(c);
+#endif
+      length--;
+      if (! length) break;
+    }
+  }
+  Serial.println(F("\n****"));
+  fona.HTTP_GET_end();
+  return true;
+}
+
+bool netStatus() {
+  int n = fona.getNetworkStatus();
+  
+  Serial.print(F("Network status ")); Serial.print(n); Serial.print(F(": "));
+  if (n == 0) Serial.println(F("Not registered"));
+  if (n == 1) Serial.println(F("Registered (home)"));
+  if (n == 2) Serial.println(F("Not registered (searching)"));
+  if (n == 3) Serial.println(F("Denied"));
+  if (n == 4) Serial.println(F("Unknown"));
+  if (n == 5) Serial.println(F("Registered roaming"));
+
+  if (!(n == 1 || n == 5)) return false;
+  else return true;
+}
+
+bool setPIN() {
+  if (! fona.unlockSIM("XXXX")) {
+    Serial.println(F("Failed"));
+    return false;
+  }
+  return true;
+}
+
+void powerOn() {
+}
+
+void moduleSetup() {
+}
+
+void disableGPRS() {
+#ifdef useGPRS
+    while (!fona.enableGPRS(false)) {
+      Serial.println(F("Failed to disable GPRS, retrying..."));
+      delay(2000); // Retry every 2s
+    }
+    Serial.println(F("Disabled GPRS!"));
+#endif
+}
+
+void disableGPS() {
+  while (!fona.enableGPS(false)) {
+    Serial.println(F("Failed to turn off GPS, retrying..."));
+    delay(2000); // Retry every 2s
+  }
+  Serial.println(F("Turned off GPS!"));
+}
+
+// Turn off the MCU completely. Can only wake up from RESET button
+// However, this can be altered to wake up via a pin change interrupt
+void MCU_powerDown() {
+  /*
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  ADCSRA = 0; // Turn off ADC
+  power_all_disable ();  // Power off ADC, Timer 0 and 1, serial interface
+  sleep_enable();
+  sleep_cpu();
+  */
+}
