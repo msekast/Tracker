@@ -25,8 +25,6 @@ char imei[16] = {0}; // MUST use a 16 character buffer for IMEI!
 
 bool pinEntered = false;
 
-#define useGPRS
-
 void setup() {
   while (!Serial);
 
@@ -105,7 +103,6 @@ void loop() {
     Serial.println("Failed to get fixture");
   }
 
-#ifdef useGPRS
   if (!pinEntered) {
     if (!netStatus()) {
       while (!setPIN()) {
@@ -165,19 +162,11 @@ void loop() {
   Serial.println("URL getting:");
   Serial.println(URL);
   httpGet(URL);
-#endif
 
-  //disableGPRS();
   disableGPS();
   
-  Serial.println(F("Shutting down..."));
-  delay(5); // This is just to read the response of the last AT command before shutting down
-  MCU_powerDown();
   Serial.print(F("Waiting for ")); Serial.print(samplingRate); Serial.println(F(" seconds\r\n"));
   delay(samplingRate * 1000UL);
-  
-  powerOn();
-  moduleSetup();
 }
 
 bool httpGet(char* URL) {
@@ -232,22 +221,6 @@ bool setPIN() {
   return true;
 }
 
-void powerOn() {
-}
-
-void moduleSetup() {
-}
-
-void disableGPRS() {
-#ifdef useGPRS
-    while (!fona.enableGPRS(false)) {
-      Serial.println(F("Failed to disable GPRS, retrying..."));
-      delay(2000); // Retry every 2s
-    }
-    Serial.println(F("Disabled GPRS!"));
-#endif
-}
-
 void disableGPS() {
   while (!fona.enableGPS(false)) {
     Serial.println(F("Failed to turn off GPS, retrying..."));
@@ -284,16 +257,4 @@ uint8_t getGPSDate(char *buffer, uint8_t maxbuff) {
   strncpy(buffer, tok, len);
   buffer[len] = 0;
   return len;
-}
-
-// Turn off the MCU completely. Can only wake up from RESET button
-// However, this can be altered to wake up via a pin change interrupt
-void MCU_powerDown() {
-  /*
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-  ADCSRA = 0; // Turn off ADC
-  power_all_disable ();  // Power off ADC, Timer 0 and 1, serial interface
-  sleep_enable();
-  sleep_cpu();
-  */
 }
