@@ -13,7 +13,7 @@ SoftwareSerial *fonaSerial = &fonaSS;
 
 Adafruit_FONA fona = Adafruit_FONA(FONA_RST);
 
-#define samplingRate 600 // The time in between posts, in seconds
+#define samplingRate 120 // The time in between posts, in seconds
 
 uint8_t readline(char *buff, uint8_t maxbuff, uint16_t timeout = 0);
 
@@ -146,7 +146,6 @@ void loop() {
     dtostrf(speed_kph, 1, 0, speedBuff);
     dtostrf(heading, 1, 0, headBuff);
     dtostrf(altitude, 1, 1, altBuff);
-    //dtostrf(battLevel, 1, 0, battBuff);
   
     // Also construct a combined, comma-separated location array
     // (many platforms require this for dashboards, like Adafruit IO):
@@ -163,7 +162,7 @@ void loop() {
   Serial.println(URL);
   httpGet(URL);
 
-  disableGPS();
+  //disableGPS();
   
   Serial.print(F("Waiting for ")); Serial.print(samplingRate); Serial.println(F(" seconds\r\n"));
   delay(samplingRate * 1000UL);
