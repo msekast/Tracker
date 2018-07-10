@@ -20,7 +20,7 @@
 
 <div id="failures" style="position: absolute; right: 20px; top: 90px; z-index: 1000;" class="badge badge-secondary"></div>
 
-<button style="position: absolute; right: 20px; top: 50px; z-index: 1000;" type="button" class="btn btn-secondary" onClick="addMarkers(3600000)">Last hour</button>
+<button style="position: absolute; right: 20px; top: 50px; z-index: 1000;" type="button" class="btn btn-secondary" onClick="toggleMarker()">Last hour</button>
 
 <div style="position: absolute; right: 20px; top: 10px; z-index: 1000;" class="btn-group" role="group" aria-label="Basic example">
   <button type="button" class="btn btn-secondary" onClick="addTile('openstreetmap')">Street</button>
@@ -63,6 +63,13 @@ function addTile(tile) {
         default:
             break;
     }
+}
+
+var perHour = false;
+function toggleMarker() {
+    if (perHour) addMarkers()
+    else addMarkers(3600000);
+    perHour = !perHour;
 }
 
 function addMarkers(within) {
