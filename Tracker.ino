@@ -14,6 +14,7 @@ SoftwareSerial *fonaSerial = &fonaSS;
 Adafruit_FONA fona = Adafruit_FONA(FONA_RST);
 
 #define samplingRate 120 // The time in between posts, in seconds
+#define gpsTries 2
 
 uint8_t readline(char *buff, uint8_t maxbuff, uint16_t timeout = 0);
 
@@ -76,7 +77,7 @@ void loop() {
 
   // Get a fix on location, try every 2s
   uint8_t counter = 0;
-  while (counter < 12 && !fona.getGPS(&latitude, &longitude, &speed_kph, &heading, &altitude)) {
+  while (counter < gpsTries && !fona.getGPS(&latitude, &longitude, &speed_kph, &heading, &altitude)) {
     Serial.println(F("Failed to get GPS location, retrying..."));
     delay(20000); // Retry every 20s
     counter++;
@@ -85,7 +86,7 @@ void loop() {
   char dateBuff[20];
   uint8_t dateLength = getGPSDate(dateBuff, 20);
 
-  bool fixture = counter < 12;
+  bool fixture = counter < gpsTries;
   if (fixture) {
     Serial.println(F("Fixed it!"));
     Serial.println(F("---------------------"));
@@ -100,7 +101,7 @@ void loop() {
     Serial.println(F("---------------------"));
   }
   else {
-    Serial.println("Failed to get fixture");
+    Serial.println("Failed to get GPS fixture");
   }
 
   if (!pinEntered) {
@@ -134,6 +135,17 @@ void loop() {
   }
   Serial.println(F("Enabled GPRS!"));
 
+  bool gsmLocOk = false;
+  uint16_t gsmLocReturncode = 0;
+  char gsmLocReplybuffer[50];
+  if (!fixture) {
+    Serial.println("Failed to get fixture, trying GSM loc");
+    gsmLocOk = fona.getGSMLoc(&gsmLocReturncode, gsmLocReplybuffer, 50);
+    if (gsmLocOk) {
+      Serial.println(F("Failed to get GSM loc"));
+    }
+  }
+
   // POST data, TODO: switch to actual POST
   char URL[255]; // Make sure this is long enough for your request URL
   if (fixture) {
@@ -153,6 +165,10 @@ void loop() {
     
     sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,lat:%s,long:%s,speed:%s,head:%s,alt:%s,date:%s", imei, latBuff, longBuff,
             speedBuff, headBuff, altBuff, dateLength ? dateBuff : "");
+  }
+  else if (gsmLocOk && gsmLocReturncode == 0) {
+    // Send e. g.: 7.470947,47.084225,2018/07/09,23:07:57
+    sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,gsmLoc:%s", imei, gsmLocReplybuffer);
   }
   else {
     sprintf(URL, "https://kasterpillar.com/bin/server/insert.php?user=No%%20ones%%20land&content=IMEI:%s,failure:Fixture", imei);
