@@ -125,7 +125,7 @@ function addMarkers(within) {
                         const hour = dateStr.substr(8, 2);
                         const min = dateStr.substr(10, 2);
                         const sec = dateStr.substr(12, 2);
-                        const d = new Date(year+'-'+month+'-'+day+'T'+hour+':'+min+':'+sec);
+                        const d = new Date(Number(year), Number(month)-1, Number(day), Number(hour), Number(min), Number(sec));
                         const delta = utcNow - d;
                         if (!within || delta < within) {
                             const dateFormatted = day+'.'+month+'.'+year+' '+(Number(hour)-now.getTimezoneOffset()/60)+':'+min+':'+sec;
@@ -144,7 +144,7 @@ function addMarkers(within) {
                         const hour = l[4].substr(0, 2);
                         const min = l[4].substr(3, 2);
                         const sec = l[4].substr(6, 2);
-                        const d = new Date(year+'-'+month+'-'+day+'T'+hour+':'+min+':'+sec);
+                        const d = new Date(Number(year), Number(month)-1, Number(day), Number(hour), Number(min), Number(sec));
                         const delta = utcNow - d;
                         if (!within || delta < within) {
                             const dateFormatted = day+'.'+month+'.'+year+' '+(Number(hour)-now.getTimezoneOffset()/60)+':'+min+':'+sec;
