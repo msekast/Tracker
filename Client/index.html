@@ -95,7 +95,7 @@ function toggleMarker(element, ms) {
     markersWithin = ms;
 }
 
-setTimeout(() => { toggleMarker(previousElement, markersWithin); }, 60000);
+setInterval(() => { toggleMarker(previousElement, markersWithin); }, 60000);
 
 function addMarkers(within) {
     if (fg) {
@@ -130,7 +130,7 @@ function addMarkers(within) {
                         if (!within || delta < within) {
                             const dateFormatted = day+'.'+month+'.'+year+' '+(Number(hour)-now.getTimezoneOffset()/60)+':'+min+':'+sec;
                             const marker = L.marker(latlng, {title: dateFormatted}).addTo(fg);
-                            marker.bindPopup('<b>'+dateFormatted+'</b>');
+                            marker.bindPopup('<b>'+dateFormatted+'</b><br/>GPS position');
                             count++;
                         }
                     }
@@ -149,7 +149,7 @@ function addMarkers(within) {
                         if (!within || delta < within) {
                             const dateFormatted = day+'.'+month+'.'+year+' '+(Number(hour)-now.getTimezoneOffset()/60)+':'+min+':'+sec;
                             const marker = L.marker(latlng, {title: dateFormatted}).addTo(fg);
-                            marker.bindPopup('<b>'+dateFormatted+'</b>');
+                            marker.bindPopup('<b>'+dateFormatted+'</b><br/>GSM position');
                             count++;
                         }
                     }
